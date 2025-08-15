@@ -439,8 +439,8 @@ _format_countdown() {
             ;;
     esac;
 
-    printf "%s%s%s next poll in %ss | %s | %s%s" \
-        "$color" "$glyph" "$x" "$interval" "$time_info" "$label" "$eol";
+    printf "%s%s next poll in %ss | %s | %s%s%s" \
+        "$color" "$glyph" "$interval" "$time_info" "$label" "$x" "$eol";
 };
 
 ################################################################################
@@ -689,6 +689,36 @@ do_watch() {
     fi;
 
     _load_tld_config;
+
+    # If no polling options are set, perform a one-time query and exit.
+    if [[ -z "$opt_interval" && -z "$opt_until" && -z "$opt_max_checks" ]]; then
+        local config server pattern output
+        config=$(_get_tld_config "$domain")
+        if [[ $? -ne 0 || -z "$config" ]]; then
+            local tld=$(_extract_tld "$domain")
+            fatal "TLD %s not supported yet. Use 'add_tld' to add support." "$tld"
+        fi
+        IFS='|' read -r server pattern <<< "$config"
+
+        info "Performing one-time query for %s on %s" "$domain" "$server"
+        output=$(__whois_query "$domain" "$server")
+        if [[ $? -ne 0 ]]; then
+            error "Failed to query whois server %s" "$server"
+            return 1
+        fi
+
+        # Print the full output for the user
+        printf "%s\n" "$output"
+
+        # Check for availability and set exit code
+        if printf "%s" "$output" | grep -Eiq -- "$pattern"; then
+            okay "Domain %s appears to be AVAILABLE." "$domain"
+            return 0
+        else
+            warn "Domain %s appears to be REGISTERED." "$domain"
+            return 1
+        fi
+    fi;
 
     local config server pattern;
     config=$(_get_tld_config "$domain");
@@ -953,10 +983,15 @@ do_test_tld() {
     local test_domain="${2:-}";
     local ret=1;
 
+    # Temporarily enable debug mode for rich output, per user suggestion
+    local was_debug=$opt_debug;
+    opt_debug=1;
+
     if [[ -z "$tld" || -z "$test_domain" ]]; then
         error "Usage: test_tld TLD DOMAIN";
         error "Example: test_tld .com nonexistent-test-domain.com";
         usage;
+        opt_debug=$was_debug; # Restore debug state
         return 2;
     fi;
 
@@ -964,6 +999,7 @@ do_test_tld() {
 
     if ! _validate_domain "$test_domain"; then
         error "Invalid domain format: %s" "$test_domain";
+        opt_debug=$was_debug; # Restore debug state
         return 2;
     fi;
 
@@ -972,6 +1008,7 @@ do_test_tld() {
     if [[ -z "${TLD_SERVERS[$tld]:-}" ]]; then
         error "TLD %s is not configured" "$tld";
         error "Use 'list_tlds' to see supported TLDs or 'add_tld' to add support";
+        opt_debug=$was_debug; # Restore debug state
         return 1;
     fi;
 
@@ -980,12 +1017,13 @@ do_test_tld() {
 
     info "Testing TLD %s against domain %s" "$tld" "$test_domain";
     info "Server: %s" "$server";
-    info "Pattern: %s" "$pattern";
+    info "Pattern: /%s/i" "$pattern";
 
     local output;
     output=$(__whois_query "$test_domain" "$server");
     if [[ $? -ne 0 ]]; then
         error "Failed to query whois server %s" "$server";
+        opt_debug=$was_debug; # Restore debug state
         return 1;
     fi;
 
@@ -994,11 +1032,12 @@ do_test_tld() {
         ret=0;
     else
         warn "Pattern NOT matched - domain may be registered or pattern incorrect";
-        info "First 10 lines of whois output:";
-        printf "%s" "$output" | sed -n '1,10p' | sed 's/^/  /';
+        info "Full whois output for debugging:";
+        printf -- "----\n%s\n----\n" "$output" >&2
         ret=1;
     fi;
 
+    opt_debug=$was_debug; # Restore debug state
     return $ret;
 };
 
@@ -1155,55 +1194,15 @@ dispatch() {
     local ret=1;
 
     case "$cmd" in
-        (watch)
+        (watch|time|list_tlds|add_tld|test_tld|install|uninstall|status)
             shift;
-            do_watch "$@";
-            ret=$?;
-            ;;
-        (time)
-            shift;
-            do_time "$@";
-            ret=$?;
-            ;;
-        (list_tlds)
-            shift;
-            do_list_tlds "$@";
-            ret=$?;
-            ;;
-        (add_tld)
-            shift;
-            do_add_tld "$@";
-            ret=$?;
-            ;;
-        (test_tld)
-            shift;
-            do_test_tld "$@";
-            ret=$?;
-            ;;
-        (install)
-            shift;
-            do_install "$@";
-            ret=$?;
-            ;;
-        (uninstall)
-            shift;
-            do_uninstall "$@";
-            ret=$?;
-            ;;
-        (status)
-            shift;
-            do_status "$@";
+            "do_$cmd" "$@";
             ret=$?;
             ;;
         (*)
-            if [[ -n "$cmd" && "$cmd" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-                do_watch "$@";
-                ret=$?;
-            else
-                error "Unknown command: %s" "$cmd";
-                usage;
-                ret=1;
-            fi;
+            error "Unknown command: %s" "$cmd";
+            usage;
+            ret=1;
             ;;
     esac;
 
@@ -1307,20 +1306,22 @@ _cleanup() {
 
 main() {
     local ret=1;
-
     trap '_cleanup' INT TERM;
 
-    opt_debug=0;
-    opt_trace=0;
-    opt_quiet=0;
-    opt_force=0;
-    opt_dev=0;
-    opt_interval="";
-    opt_expect="";
-    opt_max_checks="";
-    opt_until="";
-    opt_time_local=0;
+    # Initialize option variables
+    opt_debug=0
+    opt_trace=0
+    opt_quiet=0
+    opt_force=0
+    opt_dev=0
+    opt_interval=""
+    opt_expect=""
+    opt_max_checks=""
+    opt_until=""
+    opt_time_local=0
 
+    # Parse all options, separating them from positional arguments
+    local args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             (-d|--debug) opt_debug=1; shift ;;
@@ -1341,31 +1342,49 @@ main() {
                 [[ $# -ge 2 ]] || { error "Option --until requires an argument"; return 2; };
                 opt_until="$2"; shift 2 ;;
             (--time_local) opt_time_local=1; shift ;;
-            (--time_until)
+            (--time_until) # Legacy compatibility
                 [[ $# -ge 2 ]] || { error "Option --time_until requires an argument"; return 2; };
-                set -- "time" "$2";
+                set -- "time" "$2"; # Convert to 'time' command
                 break ;;
             (-h|--help) usage; exit 0 ;;
-            (--) shift; break ;;
+            (--) shift; args+=("$@"); break ;; # All remaining are positional
             (-*) error "Unknown option: $1"; usage; return 2 ;;
-            (*) break ;;
-        esac;
-    done;
+            (*) args+=("$1"); shift ;; # It's a positional argument
+        esac
+    done
+    # Restore positional arguments
+    [[ ${#args[@]} -gt 0 ]] && set -- "${args[@]}"
 
+    # Apply quiet mode
     if [[ "$opt_quiet" -eq 1 ]]; then
         opt_debug=0;
         opt_trace=0;
     fi;
 
+    # If no positional args, show usage
     if [[ $# -eq 0 ]]; then
         error "No command or domain specified";
         usage;
         return 2;
     fi;
 
+    # Detect legacy `watchdom domain.com` syntax and prepend 'watch' command
+    local cmd="${1:-}"
+    case "$cmd" in
+        (watch|time|list_tlds|add_tld|test_tld|install|uninstall|status)
+             # It's a normal command, do nothing
+            ;;
+        (*)
+            # It's not a known command. Check if it's a domain (legacy mode).
+            if [[ -n "$cmd" && "$cmd" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+                # Prepend 'watch' to the argument list
+                set -- watch "$@";
+            fi;
+            ;;
+    esac;
+
     dispatch "$@";
     ret=$?;
-
     return $ret;
 };
 
