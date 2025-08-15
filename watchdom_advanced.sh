@@ -26,6 +26,9 @@ readonly FX_BIN_DIR="${XDG_BIN}/fx"
 readonly FX_INSTALL_PATH="${FX_LIB_DIR}/${SELF_NAME}"
 readonly FX_BIN_LINK="${FX_BIN_DIR}/${SELF_NAME}"
 
+# Error patterns
+readonly RATE_LIMIT_PATTERN="rate limit|exceeded|too many|try again|access denied|quota"
+
 ################################################################################
 # config
 ################################################################################
@@ -458,7 +461,7 @@ _check_grace_timeout() {
 
     [[ -z "$target_epoch" ]] && return 0;
 
-    local time_since_target=$((target_epoch - now_epoch));
+    local time_since_target=$((now_epoch - target_epoch));
 
     if (( time_since_target > 10800 )); then
         if [[ ! -f "$grace_prompted_file" ]]; then
@@ -474,8 +477,12 @@ _check_grace_timeout() {
             printf "[c] Custom interval (specify seconds)\n" >&2;
             printf "Choice [y/n/c]: " >&2;
 
-            local choice;
-            read -r choice;
+            local choice="y"
+            if [[ ${opt_yes:-0} -eq 1 ]]; then
+                printf "y (auto-confirmed)\n" >&2
+            else
+                read -r choice
+            fi
 
             case "${choice,,}" in
                 (n|no)
@@ -507,6 +514,52 @@ _check_grace_timeout() {
 ################################################################################
 # complex helpers
 ################################################################################
+
+################################################################################
+# _ensure_dependency
+################################################################################
+# Checks for a command and prompts to install it if missing.
+# @param 1: command name (e.g., "whois")
+# @param 2: package name (e.g., "whois")
+_ensure_dependency() {
+    local cmd_name="$1"
+    local pkg_name="$2"
+
+    if ! command -v "$cmd_name" >/dev/null 2>&1; then
+        warn "Required command '%s' not found." "$cmd_name"
+        printf "Attempt to install package '%s' using apt-get? [y/n]: " "$pkg_name" >&2
+
+        local choice="n"
+        if [[ ${opt_yes:-0} -eq 1 ]]; then
+            choice="y"
+            printf "y (auto-confirmed)\n" >&2
+        else
+            read -r choice
+        fi
+
+        case "${choice,,}" in
+            (y|yes)
+                info "Attempting to install %s..." "$pkg_name"
+                if command -v sudo >/dev/null 2>&1; then
+                    sudo apt-get update && sudo apt-get install -y "$pkg_name"
+                else
+                    error "sudo command not found. Cannot attempt installation."
+                    fatal "Please install '%s' manually and try again." "$pkg_name"
+                fi
+
+                # Verify installation
+                if ! command -v "$cmd_name" >/dev/null 2>&1; then
+                    fatal "Installation of '%s' failed. Please install it manually." "$pkg_name"
+                else
+                    okay "Successfully installed '%s'." "$pkg_name"
+                fi
+                ;;
+            (*)
+                fatal "Missing dependency '%s'. Aborting." "$cmd_name"
+                ;;
+        esac
+    fi
+};
 
 ################################################################################
 # __parse_datetime
@@ -674,6 +727,8 @@ do_watch() {
     local domain="${1:-}";
     local ret=1;
 
+    _ensure_dependency "whois" "whois";
+
     if [[ -z "$domain" ]]; then
         error "Domain required for watch command";
         usage;
@@ -794,6 +849,11 @@ do_watch() {
         timestamp="$(date -Is)";
         output=$(__whois_query "$domain" "$server");
 
+        # Check for rate limiting first
+        if printf "%s" "$output" | grep -Eiq -- "$RATE_LIMIT_PATTERN"; then
+            fatal "Rate limit detected from WHOIS server. Please wait and try again later."
+        fi;
+
         if printf "%s" "$output" | grep -Eiq -- "$pattern"; then
             okay "Pattern matched for %s" "$domain";
             printf "%s" "$output" | sed -n '1,20p';
@@ -844,7 +904,9 @@ do_watch() {
             local status_line;
             status_line=$(_format_countdown "$phase" "$r" "$time_info");
             __print_status_line "$status_line";
+            trace "Countdown sleeping for 1s...";
             sleep 1;
+            trace "Countdown sleep finished.";
         done;
 
         printf "\r%80s\r" "" >&2;
@@ -982,6 +1044,8 @@ do_test_tld() {
     local tld="${1:-}";
     local test_domain="${2:-}";
     local ret=1;
+
+    _ensure_dependency "whois" "whois";
 
     # Temporarily enable debug mode for rich output, per user suggestion
     local was_debug=$opt_debug;
@@ -1319,6 +1383,7 @@ main() {
     opt_max_checks=""
     opt_until=""
     opt_time_local=0
+    opt_yes=0
 
     # Parse all options, separating them from positional arguments
     local args=()
@@ -1329,6 +1394,7 @@ main() {
             (-q|--quiet) opt_quiet=1; opt_debug=0; opt_trace=0; shift ;;
             (-f|--force) opt_force=1; shift ;;
             (-D|--dev) opt_dev=1; opt_debug=1; opt_trace=1; shift ;;
+            (-y|--yes) opt_yes=1; shift ;;
             (-i)
                 [[ $# -ge 2 ]] || { error "Option -i requires an argument"; return 2; };
                 opt_interval="$2"; shift 2 ;;
