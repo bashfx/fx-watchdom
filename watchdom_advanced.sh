@@ -142,12 +142,12 @@ uspark=$'\xe2\x9f\xa1'; #todo: change to unicode format
 ################################################################################
 # simple stderr
 ################################################################################
-info()  { [[ ${opt_debug:-0} -eq 1 ]] && printf "%s[%s]%s %s\n" "$blue" "$(date +%H:%M:%S)" "$x" "$*" >&2; };
-okay()  { [[ ${opt_debug:-0} -eq 1 ]] && printf "%s%s%s %s\n" "$green" "$pass" "$x" "$*" >&2; };
-warn()  { [[ ${opt_debug:-0} -eq 1 ]] && printf "%s%s%s %s\n" "$yellow" "$delta" "$x" "$*" >&2; };
-error() { printf "%s%s%s %s\n" "$red" "$fail" "$x" "$*" >&2; };
-fatal() { printf "%s%s%s %s\n" "$red2" "$fail" "$x" "$*" >&2; exit 1; };
-trace() { [[ ${opt_trace:-0} -eq 1 ]] && printf "%s[%s]%s %s\n" "$grey" "$(date +%H:%M:%S)" "$x" "$*" >&2; };
+info()  { [[ ${opt_debug:-0} -eq 1 ]] && { local msg; msg=$(printf "$@"); printf "%s[%s]%s %s\n" "$blue" "$(date +%H:%M:%S)" "$x" "$msg" >&2; }; };
+okay()  { [[ ${opt_debug:-0} -eq 1 ]] && { local msg; msg=$(printf "$@"); printf "%s%s%s %s\n" "$green" "$pass" "$x" "$msg" >&2; }; };
+warn()  { [[ ${opt_debug:-0} -eq 1 ]] && { local msg; msg=$(printf "$@"); printf "%s%s%s %s\n" "$yellow" "$delta" "$x" "$msg" >&2; }; };
+error() { local msg; msg=$(printf "$@"); printf "%s%s%s %s\n" "$red" "$fail" "$x" "$msg" >&2; };
+fatal() { local msg; msg=$(printf "$@"); printf "%s%s%s %s\n" "$red2" "$fail" "$x" "$msg" >&2; exit 1; };
+trace() { [[ ${opt_trace:-0} -eq 1 ]] && { local msg; msg=$(printf "$@"); printf "%s[%s]%s %s\n" "$grey" "$(date +%H:%M:%S)" "$x" "$msg" >&2; }; };
 
 ################################################################################
 # notification system
