@@ -1,9 +1,8 @@
 #!/bin/bash
 
 # ==============================================================================
-# Comprehensive Test Suite for watchdom (Final UX - Explicit)
+# Final Test Suite - Final Version
 # ==============================================================================
-# This script explicitly checks each command and prints its output for review.
 
 # --- State and Counters ---
 TOTAL_TESTS=0
@@ -31,52 +30,33 @@ print_fail() {
 print_summary() {
     print_header "Test Summary"
     if [[ $FAILED_TESTS -eq 0 ]]; then
-        printf "%sResult: All %d tests passed! 🎉%s\n" "$green" "$TOTAL_TESTS" "$reset"
-        exit 0
+        printf "%sResult: All %d tests passed! 🎉%s\n" "$green" "$TOTAL_TESTS" "$reset"; exit 0;
     else
-        printf "%sResult: %d/%d tests passed. %d failed.%s\n" "$red" "$PASSED_TESTS" "$TOTAL_TESTS" "$FAILED_TESTS" "$reset"
-        printf "\n%sFailed tests:%s\n" "$yellow" "$reset"
+        printf "%sResult: %d/%d tests passed. %d failed.%s\n" "$red" "$PASSED_TESTS" "$TOTAL_TESTS" "$FAILED_TESTS" "$reset";
+        printf "\n%sFailed tests:%s\n" "$yellow" "$reset";
         for desc in "${FAILED_DESCRIPTIONS[@]}"; do printf "  - %s\n" "$desc"; done
         exit 1
     fi
 }
 trap print_summary EXIT
 
-run_test_and_print() {
-    ((TOTAL_TESTS++))
-    current_test_desc="$1"
-    command="$2"
-
-    printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
-    printf "Command: %s\n" "$command"
-
-    output=$(eval "$command" 2>&1)
-    exit_code=$?
-
-    echo "--- Output (Exit Code: $exit_code) ---"
-    printf "%s\n" "$output"
-    echo "------------------------------------"
-
-    # Return the exit code for the caller to evaluate
-    return $exit_code
-}
-
-
 # --- Main Test Execution ---
-print_header "Setup and Installation"
+print_header "Setup"
 chmod +x watchdom_advanced.sh
 ./watchdom_advanced.sh uninstall > /dev/null 2>&1 || true
 
-# Test 1
-current_test_desc="Initial status check (not installed)"
-run_test_and_print "$current_test_desc" "./watchdom_advanced.sh status"
-exit_code=$?
+print_header "Installation and Core Tests"
+
+((TOTAL_TESTS++)); current_test_desc="Initial status check (not installed)"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(./watchdom_advanced.sh status 2>&1); exit_code=$?
+echo "$output"
 if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; else print_pass; fi
 
-# Test 2
-current_test_desc="Install script"
-run_test_and_print "$current_test_desc" "./watchdom_advanced.sh install"
-exit_code=$?
+((TOTAL_TESTS++)); current_test_desc="Install script"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(./watchdom_advanced.sh install 2>&1); exit_code=$?
+echo "$output"
 if [[ $exit_code -ne 0 ]]; then
     print_fail "Install failed. Expected exit code 0, got $exit_code."
 else
@@ -92,69 +72,74 @@ else
 fi
 
 export PATH="$HOME/.local/bin/fx:$PATH"
+hash -r
 
-print_header "Core Functionality Tests"
-
-# Test 3
-current_test_desc="Status check (installed)"
-run_test_and_print "$current_test_desc" "watchdom status -d"
-exit_code=$?
+((TOTAL_TESTS++)); current_test_desc="Status check (installed)"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(watchdom status -d 2>&1); exit_code=$?
+echo "$output"
 if [[ $exit_code -ne 0 ]]; then print_fail "Status failed. Expected 0, got $exit_code."; elif ! printf "%s" "$output" | grep -q "is properly installed"; then print_fail "Did not print success message."; else print_pass; fi
 
-# Test 4
-current_test_desc="List TLDs"
-run_test_and_print "$current_test_desc" "watchdom list_tlds"
-exit_code=$?
+((TOTAL_TESTS++)); current_test_desc="List TLDs"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(watchdom list_tlds 2>&1); exit_code=$?
+echo "$output"
 if [[ $exit_code -ne 0 ]]; then print_fail "list_tlds failed. Expected 0, got $exit_code."; elif ! printf "%s" "$output" | grep -q ".com"; then print_fail "Did not list .com TLD."; else print_pass; fi
 
-# Test 5
-current_test_desc="Test TLD on registered domain"
-run_test_and_print "$current_test_desc" "watchdom test_tld .com google.com"
-exit_code=$?
+((TOTAL_TESTS++)); current_test_desc="Test TLD on registered domain"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(watchdom test_tld .com google.com 2>&1); exit_code=$?
+echo "$output"
 if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; elif ! printf "%s" "$output" | grep -q "Pattern NOT matched"; then print_fail "Did not print 'NOT matched' message."; else print_pass; fi
 
-# Test 6
-current_test_desc="Test TLD on available domain"
-run_test_and_print "$current_test_desc" "watchdom test_tld .com a-domain-that-does-not-exist-for-sure12345.com"
-exit_code=$?
+((TOTAL_TESTS++)); current_test_desc="Test TLD on available domain"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(watchdom test_tld .com a-domain-that-does-not-exist-for-sure12345.com 2>&1); exit_code=$?
+echo "$output"
 if [[ $exit_code -ne 0 ]]; then print_fail "Incorrect exit code. Expected 0, got $exit_code."; elif ! printf "%s" "$output" | grep -q "Pattern MATCHED"; then print_fail "Did not print 'MATCHED' message."; else print_pass; fi
 
-# Test 7
-current_test_desc="Time command"
-run_test_and_print "$current_test_desc" "watchdom time '2099-01-01 00:00:00 UTC'"
-exit_code=$?
+((TOTAL_TESTS++)); current_test_desc="Time command"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(watchdom time '2099-01-01 00:00:00 UTC' 2>&1); exit_code=$?
+echo "$output"
 if [[ $exit_code -ne 0 ]]; then print_fail "Time command failed. Expected 0, got $exit_code."; elif ! printf "%s" "$output" | grep -q "Remaining"; then print_fail "Did not print 'Remaining' message."; else print_pass; fi
 
 print_header "Feature and Flag Tests"
 
-# Test 8
-current_test_desc="One-time query feature"
-run_test_and_print "$current_test_desc" "watchdom google.com"
-exit_code=$?
+((TOTAL_TESTS++)); current_test_desc="One-time query feature"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(watchdom google.com 2>&1); exit_code=$?
+echo "$output"
 if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; elif ! printf "%s" "$output" | grep -q "Domain Name:"; then print_fail "Did not print WHOIS info."; else print_pass; fi
 
-# Test 9
-current_test_desc="Interval flag (-i)"
-run_test_and_print "$current_test_desc" "watchdom -d google.com -i 2 -n 1"
-exit_code=$?
-if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; elif ! printf "%s" "$output" | grep -q "base interval=2s"; then print_fail "Did not print correct interval message."; else print_pass; fi
+((TOTAL_TESTS++)); current_test_desc="Interval flag (-i 10)"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(watchdom -d google.com -i 10 -n 1 2>&1); exit_code=$?
+echo "$output"
+if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; elif ! printf "%s" "$output" | grep -q "base interval=10s"; then print_fail "Did not print correct interval message."; else print_pass; fi
 
-# Test 10
-current_test_desc="Until flag (--until)"
-run_test_and_print "$current_test_desc" "watchdom -d google.com --until '2099-01-01 00:00:00 UTC' -i 1 -n 1"
-exit_code=$?
+((TOTAL_TESTS++)); current_test_desc="Until flag (--until)"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(watchdom -d google.com --until '2099-01-01 00:00:00 UTC' -i 1 -n 1 2>&1); exit_code=$?
+echo "$output"
 if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; elif ! printf "%s" "$output" | grep -q "Target UTC"; then print_fail "Did not print correct target message."; else print_pass; fi
+
+((TOTAL_TESTS++)); current_test_desc="Auto-yes flag (-y) for grace period"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(watchdom -d -y google.com --until "2020-01-01 00:00:00 UTC" -n 1 2>&1); exit_code=$?
+echo "$output"
+if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; elif ! printf "%s" "$output" | grep -q "y (auto-confirmed)"; then print_fail "Did not auto-confirm prompt."; else print_pass; fi
 
 print_header "Uninstallation"
 
-# Test 11
-current_test_desc="Uninstall command"
-run_test_and_print "$current_test_desc" "watchdom uninstall"
-exit_code=$?
+((TOTAL_TESTS++)); current_test_desc="Uninstall command"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(watchdom uninstall 2>&1); exit_code=$?
+echo "$output"
 if [[ $exit_code -ne 0 ]]; then print_fail "Uninstall failed. Expected 0, got $exit_code."; else print_pass; fi
 
-# Test 12
-current_test_desc="Final status check (not installed)"
-run_test_and_print "$current_test_desc" "./watchdom_advanced.sh status"
-exit_code=$?
+((TOTAL_TESTS++)); current_test_desc="Final status check (not installed)"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(./watchdom_advanced.sh status 2>&1); exit_code=$?
+echo "$output"
 if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; else print_pass; fi
