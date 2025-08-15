@@ -458,7 +458,7 @@ _check_grace_timeout() {
 
     [[ -z "$target_epoch" ]] && return 0;
 
-    local time_since_target=$((target_epoch - now_epoch));
+    local time_since_target=$((now_epoch - target_epoch));
 
     if (( time_since_target > 10800 )); then
         if [[ ! -f "$grace_prompted_file" ]]; then
@@ -844,7 +844,9 @@ do_watch() {
             local status_line;
             status_line=$(_format_countdown "$phase" "$r" "$time_info");
             __print_status_line "$status_line";
+            trace "Countdown sleeping for 1s...";
             sleep 1;
+            trace "Countdown sleep finished.";
         done;
 
         printf "\r%80s\r" "" >&2;
