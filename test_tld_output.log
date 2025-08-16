@@ -1,4 +1,0 @@
-[36m[21:14:27][0m Testing TLD %s against domain %s .com a-domain-that-does-not-exist-for-sure12345.com
-[36m[21:14:27][0m Server: %s whois.verisign-grs.com
-[36m[21:14:27][0m Pattern: /%s/i No match for
-[32m✓[0m Pattern MATCHED - domain appears available
