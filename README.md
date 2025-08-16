@@ -1,68 +1,47 @@
 # watchdom
 
-**Intelligent Domain Availability Monitoring with Phase-Aware Polling**
+**Intelligent Domain Availability Monitoring with a User-Friendly CLI**
 
-watchdom is a professional command-line tool for monitoring domain availability with smart interval adjustment, extensible TLD support, and automated notifications. Built following BashFX architectural principles for reliability and maintainability.
+`watchdom` is a professional, user-centric command-line tool for monitoring domain availability. It features smart, phase-aware polling, an extensible TLD system, and a robust, interactive user experience.
 
-## 🎯 Core Concepts
+## ✨ Key Features
 
-### **Phase-Aware Polling System**
-
-watchdom automatically adjusts its polling behavior based on proximity to your target time:
-
-| Phase | When | Interval | Visual | Description |
-|-------|------|----------|--------|-------------|
-| **PRE** | >30min before target | Base interval (60s) | 🔵 λ `[PRE]` | Conservative monitoring |
-| **HEAT** | ≤30min before target | Ramps 30s → 10s | 🔴 ▲ `[HEAT]` | Aggressive monitoring |
-| **GRACE** | 0-3hrs after target | Sticks at 10s | 🟣 △ `[GRACE]` | High-frequency watch |
-| **COOL** | >3hrs after target | 30s → 1hr progressive | 🔵 ❄ `[COOL]` | Resource-conscious cooldown |
-
-### **Extensible TLD Support**
-
-- **Built-in**: `.com`, `.net`, `.org` via Verisign/PIR
-- **User-configurable**: Add any TLD via `~/.watchdomrc` or CLI commands
-- **Pattern matching**: Flexible regex patterns for "domain available" detection
-
-### **Smart Resource Management**
-
-- **Rate limiting**: Warns about aggressive intervals to prevent service abuse
-- **Cooldown system**: Prevents indefinite fast polling after target time
-- **Grace period prompts**: User intervention after extended monitoring
+- **Phase-Aware Polling:** Automatically adjusts its polling frequency as your target time nears.
+- **One-Time Queries:** Quickly check a domain's status with a single command.
+- **Extensible TLD Support:** Add support for any TLD via the command line or `~/.watchdomrc`.
+- **Interactive Dependency Check:** Automatically detects if `whois` is missing and prompts for installation.
+- **Rate Limit Detection:** Intelligently detects common rate-limiting messages and exits gracefully.
+- **Auto-Yes Flag (`-y`):** Streamline operation in automated scripts by auto-confirming prompts.
+- **XDG+ Compliant:** Follows modern Linux filesystem standards.
 
 ## 📦 Installation
 
-### Quick Install
+First, make the script executable:
 ```bash
-# Download and run from anywhere
-./watchdom.sh example.com
-
-# Install system-wide (recommended)
-./watchdom.sh install
-watchdom example.com  # Now available globally
+chmod +x watchdom_advanced.sh
 ```
 
-### Installation Locations (XDG+ Compliant)
-- **Script**: `~/.local/lib/fx/watchdom`
-- **Symlink**: `~/.local/bin/watchdom`  
-- **Config**: `~/.watchdomrc` (user TLD configurations)
+Then, run the installer:
+```bash
+./watchdom_advanced.sh install
+```
+The script will be installed to `~/.local/lib/fx/watchdom` and a symlink will be created at `~/.local/bin/fx/watchdom`. The script will notify you if you need to add this directory to your system's `PATH`.
 
 ## 🚀 Quick Start
 
 ```bash
-# Basic domain monitoring
+# Perform a single, immediate check for a domain
 watchdom example.com
 
-# Monitor with target deadline
-watchdom example.com --until "2025-12-25 18:00:00 UTC"
+# Monitor a domain with a 10-second polling interval
+watchdom example.com -i 10
 
-# Custom polling interval
-watchdom example.com -i 30
+# Monitor a domain until a specific drop time
+watchdom example.com --until "2026-01-01 12:00:00 UTC"
 
-# Verbose monitoring with debug output
-watchdom -d example.com
-
-# Time countdown only (no domain checking)
-watchdom time "2025-12-25 18:00:00 UTC"
+# Add a new TLD and test it
+watchdom add_tld .io whois.nic.io "is available for purchase"
+watchdom test_tld .io my-new-app.io
 ```
 
 ## 📋 Command Reference
@@ -70,8 +49,8 @@ watchdom time "2025-12-25 18:00:00 UTC"
 ### **Core Commands**
 
 | Command | Description | Example |
-|---------|-------------|---------|
-| `watch DOMAIN` | Monitor domain availability | `watchdom watch example.com` |
+|---|---|---|
+| `watch DOMAIN` | Monitor a domain. Runs a one-time query by default. | `watchdom watch example.com` |
 | `time DATETIME` | Standalone time countdown | `watchdom time "2025-12-25 18:00:00 UTC"` |
 | `list_tlds` | Show supported TLD patterns | `watchdom list_tlds` |
 | `add_tld TLD SERVER PATTERN` | Add custom TLD support | `watchdom add_tld .uk whois.nominet.uk "No such domain"` |
@@ -104,6 +83,7 @@ watchdom time "2025-12-25 18:00:00 UTC"
 | `-n COUNT` | Max checks before stopping | Unlimited |
 | `--until DATETIME` | Target time for ramping | None |
 | `--time_local` | Display local time only | UTC + Local |
+| `-y, --yes` | Automatically answer "yes" to all prompts. | Off |
 
 ## 💡 Usage Examples
 
@@ -187,7 +167,7 @@ Enable automated alerts by setting all required environment variables:
 
 ```bash
 export NOTIFY_EMAIL="user@domain.com"
-export NOTIFY_FROM="watchdom@server.com"  
+export NOTIFY_FROM="watchdom@server.com"
 export NOTIFY_SMTP_HOST="smtp.gmail.com"
 export NOTIFY_SMTP_PORT="587"
 export NOTIFY_SMTP_USER="username"
@@ -201,7 +181,7 @@ export NOTIFY_SMTP_PASS="app_password"
 
 **Supported Email Backends** (automatic fallback):
 1. **mutt** (preferred)
-2. **msmtp + mail** 
+2. **msmtp + mail**
 3. **sendmail**
 
 ## 🔧 Configuration
@@ -238,7 +218,7 @@ export WATCHDOM_TIME_LOCAL=1     # Default to local time display
 
 ### **Status Messages**
 - ✅ **SUCCESS**: Domain becomes available
-- ⚠️ **WARNING**: Rate limiting or configuration issues  
+- ⚠️ **WARNING**: Rate limiting or configuration issues
 - ❌ **ERROR**: Recoverable problems
 - 💀 **FATAL**: Unrecoverable errors (exits)
 
@@ -267,7 +247,7 @@ export WATCHDOM_TIME_LOCAL=1     # Default to local time display
 
 ### **Input Validation**
 - Domain format checking
-- TLD configuration validation  
+- TLD configuration validation
 - Safe handling of user patterns and server names
 
 ## 🏗️ Architecture
@@ -291,11 +271,12 @@ watchdom add_tld .example whois.example.com "Not found"
 ```
 
 **"Whois command not found"**
+The script will automatically detect this and prompt you to install it. If that fails, you can install it manually:
 ```bash
 # Install whois on your system
-sudo apt install whois        # Debian/Ubuntu
-sudo yum install whois        # RHEL/CentOS
-brew install whois            # macOS
+sudo apt-get install -y whois  # Debian/Ubuntu
+sudo yum install whois         # RHEL/CentOS
+brew install whois             # macOS
 ```
 
 **"Email notifications not working"**
@@ -361,7 +342,7 @@ watchdom time "2025-12-25 18:00:00 UTC"
 
 ---
 
-**Version**: 2.0.0-bashfx  
-**Dependencies**: bash, whois, date, grep, sed  
-**License**: Open source  
+**Version**: 2.0.0-bashfx
+**Dependencies**: bash, whois, date, grep, sed
+**License**: Open source
 **Compatibility**: Linux, macOS, BSD systems
