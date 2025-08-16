@@ -31,7 +31,7 @@ WATCH OPTIONS:
   --time-utc      Display times in UTC instead of local
 
 GLOBAL OPTIONS:
-  -d, --debug     Enable debug messages
+  -d, --debug     Enable debug messages (default: ON)
   -t, --trace     Enable trace messages (verbose polling)
   -q, --quiet     Force quiet mode (errors only)
   -y, --yes       Auto-confirm prompts
@@ -63,19 +63,19 @@ EOF
 # options - Argument parsing (extracted from main for BashFX compliance)
 ################################################################################
 options() {
-    # Initialize option variables
-    opt_debug=0
-    opt_trace=0
-    opt_quiet=0
-    opt_yes=0
-    opt_interval=""
-    opt_expect=""
-    opt_max_checks=""
-    opt_until=""
-    opt_time_utc=0
+    # Initialize option variables with defaults
+    opt_debug=${DEFAULT_DEBUG};  # Debug ON by default now
+    opt_trace=0;
+    opt_quiet=0;
+    opt_yes=0;
+    opt_interval="";
+    opt_expect="";
+    opt_max_checks="";
+    opt_until="";
+    opt_time_utc=0;
     
     # Parse all options, separating them from positional arguments
-    local args=()
+    local args=();
     while [[ $# -gt 0 ]]; do
         case "$1" in
             (-d|--debug) opt_debug=1; shift ;;
@@ -83,16 +83,16 @@ options() {
             (-q|--quiet) opt_quiet=1; opt_debug=0; opt_trace=0; shift ;;
             (-y|--yes) opt_yes=1; shift ;;
             (-i)
-                [[ $# -ge 2 ]] || { error "Option -i requires an argument"; return 2; }
+                [[ $# -ge 2 ]] || { error "Option -i requires an argument"; return 2; };
                 opt_interval="$2"; shift 2 ;;
             (-e)
-                [[ $# -ge 2 ]] || { error "Option -e requires an argument"; return 2; }
+                [[ $# -ge 2 ]] || { error "Option -e requires an argument"; return 2; };
                 opt_expect="$2"; shift 2 ;;
             (-n)
-                [[ $# -ge 2 ]] || { error "Option -n requires an argument"; return 2; }
+                [[ $# -ge 2 ]] || { error "Option -n requires an argument"; return 2; };
                 opt_max_checks="$2"; shift 2 ;;
             (--until)
-                [[ $# -ge 2 ]] || { error "Option --until requires an argument"; return 2; }
+                [[ $# -ge 2 ]] || { error "Option --until requires an argument"; return 2; };
                 opt_until="$2"; shift 2 ;;
             (--time-utc|--utc) opt_time_utc=1; shift ;;
             (--time-local) opt_time_utc=0; shift ;;
@@ -100,122 +100,122 @@ options() {
             (--) shift; args+=("$@"); break ;;
             (-*) error "Unknown option: %s" "$1"; usage; return 2 ;;
             (*) args+=("$1"); shift ;;
-        esac
-    done
+        esac;
+    done;
     
     # Restore positional arguments
-    [[ ${#args[@]} -gt 0 ]] && set -- "${args[@]}"
+    [[ ${#args[@]} -gt 0 ]] && set -- "${args[@]}";
     
     # Apply quiet mode override
     if [[ "$opt_quiet" -eq 1 ]]; then
-        opt_debug=0
-        opt_trace=0
-    fi
+        opt_debug=0;
+        opt_trace=0;
+    fi;
     
     # Export parsed arguments
-    export opt_debug opt_trace opt_quiet opt_yes opt_interval opt_expect opt_max_checks opt_until opt_time_utc
+    export opt_debug opt_trace opt_quiet opt_yes opt_interval opt_expect opt_max_checks opt_until opt_time_utc;
     
     # Return remaining arguments via global array
-    remaining_args=("$@")
-    return 0
+    remaining_args=("$@");
+    return 0;
 }
 
 ################################################################################
 # dispatch - Command routing (extracted from main for BashFX compliance)
 ################################################################################
 dispatch() {
-    local cmd="${1:-}"
-    local ret=1
+    local cmd="${1:-}";
+    local ret=1;
     
     # Validate command
     if [[ -z "$cmd" ]]; then
-        error "No command specified"
-        usage
-        return 2
-    fi
+        error "No command specified";
+        usage;
+        return 2;
+    fi;
     
     # Route to command functions
     case "$cmd" in
         (query)
-            [[ $# -ge 2 ]] || { error "Command 'query' requires a domain"; return 2; }
-            shift
-            do_query "$@"
-            ret=$?
+            [[ $# -ge 2 ]] || { error "Command 'query' requires a domain"; return 2; };
+            shift;
+            do_query "$@";
+            ret=$?;
             ;;
         (watch)
-            [[ $# -ge 2 ]] || { error "Command 'watch' requires a domain"; return 2; }
-            shift
-            do_watch "$@"
-            ret=$?
+            [[ $# -ge 2 ]] || { error "Command 'watch' requires a domain"; return 2; };
+            shift;
+            do_watch "$@";
+            ret=$?;
             ;;
         (time)
-            [[ $# -ge 2 ]] || { error "Command 'time' requires a datetime"; return 2; }
-            shift
-            do_time "$@"
-            ret=$?
+            [[ $# -ge 2 ]] || { error "Command 'time' requires a datetime"; return 2; };
+            shift;
+            do_time "$@";
+            ret=$?;
             ;;
         (list_tlds)
-            do_list_tlds
-            ret=$?
+            do_list_tlds;
+            ret=$?;
             ;;
         (add_tld)
-            [[ $# -ge 4 ]] || { error "Command 'add_tld' requires TLD, server, and pattern"; return 2; }
-            shift
-            do_add_tld "$@"
-            ret=$?
+            [[ $# -ge 4 ]] || { error "Command 'add_tld' requires TLD, server, and pattern"; return 2; };
+            shift;
+            do_add_tld "$@";
+            ret=$?;
             ;;
         (test_tld)
-            [[ $# -ge 3 ]] || { error "Command 'test_tld' requires TLD and test domain"; return 2; }
-            shift
-            do_test_tld "$@"
-            ret=$?
+            [[ $# -ge 3 ]] || { error "Command 'test_tld' requires TLD and test domain"; return 2; };
+            shift;
+            do_test_tld "$@";
+            ret=$?;
             ;;
         (install)
-            do_install
-            ret=$?
+            do_install;
+            ret=$?;
             ;;
         (uninstall)
-            do_uninstall  
-            ret=$?
+            do_uninstall;
+            ret=$?;
             ;;
         (status)
-            do_status
-            ret=$?
+            do_status;
+            ret=$?;
             ;;
         (*)
-            error "Unknown command: %s" "$cmd"
-            usage
-            ret=2
+            error "Unknown command: %s" "$cmd";
+            usage;
+            ret=2;
             ;;
-    esac
+    esac;
     
-    return $ret
+    return $ret;
 }
 
 ################################################################################
 # main - Entry point (BashFX compliant: parse and dispatch only)
 ################################################################################
 main() {
-    local ret=1
+    local ret=1;
     
     # Set up signal handling
-    trap '_cleanup' INT TERM
+    trap '_cleanup' INT TERM;
     
     # Parse arguments
-    local remaining_args=()
+    local remaining_args=();
     if ! options "$@"; then
-        return 2
-    fi
+        return 2;
+    fi;
     
     # Dispatch to command
     if [[ ${#remaining_args[@]} -gt 0 ]]; then
-        dispatch "${remaining_args[@]}"
-        ret=$?
+        dispatch "${remaining_args[@]}";
+        ret=$?;
     else
-        error "No command specified"
-        usage
-        ret=2
-    fi
+        error "No command specified";
+        usage;
+        ret=2;
+    fi;
     
-    return $ret
+    return $ret;
 }

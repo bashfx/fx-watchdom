@@ -146,5 +146,7 @@ set -euo pipefail
 # Global variables for cleanup
 declare -a remaining_args=()
 
-# Invoke main function
-main "$@"
+# Invoke main function only when executed directly (not sourced)
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@";
+fi;

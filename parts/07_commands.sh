@@ -1,371 +1,482 @@
 ################################################################################
-# commands (do_*) - business logic with proper BashFX hierarchy
+# commands (do_*) - business logic with enhanced UX (Phase 2)
 ################################################################################
 
 ################################################################################
-# do_query - Single WHOIS query command (FIX: was buried in watch logic)
+# do_query - Single WHOIS query command with enhanced output
 ################################################################################
 do_query() {
-    local domain="$1"
-    local ret=1
+    local domain="$1";
+    local ret=1;
     
     # Validate input
     if ! _validate_domain "$domain"; then
-        return 2
-    fi
+        return 2;
+    fi;
     
     # Load TLD configuration
-    _load_tld_config
+    _load_tld_config;
     
-    info "Performing single WHOIS query for %s" "$domain"
+    info "Performing single WHOIS query for %s" "$domain";
     
     # Execute WHOIS query
-    local whois_output
+    local whois_output;
     if whois_output=$(__whois_query "$domain"); then
         # Extract domain status and registrar
-        local domain_status registrar
-        domain_status=$(__extract_domain_status "$whois_output")
-        registrar=$(__extract_registrar "$whois_output")
+        local domain_status registrar;
+        domain_status=$(__extract_domain_status "$whois_output");
+        registrar=$(__extract_registrar "$whois_output");
         
-        # Print results
-        printf "\n%sDomain Query Results%s\n" "$blue" "$x"
-        printf "Domain: %s\n" "$domain"
-        printf "Status: %s\n" "$domain_status"
-        printf "Registrar: %s\n" "$registrar"
-        printf "\n%sRaw WHOIS Output:%s\n" "$grey" "$x"
-        echo "$whois_output"
+        # Enhanced results display with colors and glyphs
+        printf "\n%s%s Domain Query Results %s%s\n" "$blue" "$lambda" "$lambda" "$x";
+        printf "%sDomain:%s %s\n" "$white" "$x" "$domain";
         
-        # Set return code based on status
-        if [[ "$domain_status" == "AVAILABLE" ]]; then
-            ret=0  # Success - domain is available
-        else
-            ret=1  # Not available
-        fi
+        # Status with appropriate color
+        case "$domain_status" in
+            (AVAILABLE)
+                printf "%sStatus:%s %s%s %s%s\n" "$white" "$x" "$green" "$pass" "$domain_status" "$x";
+                ret=0;  # Success - domain is available
+                ;;
+            (PENDING-DELETE)
+                printf "%sStatus:%s %s%s %s%s\n" "$white" "$x" "$yellow" "$delta" "$domain_status" "$x";
+                ret=1;  # Pending status
+                ;;
+            (*)
+                printf "%sStatus:%s %s%s %s%s\n" "$white" "$x" "$red" "$fail" "$domain_status" "$x";
+                ret=1;  # Not available
+                ;;
+        esac;
+        
+        printf "%sRegistrar:%s %s\n" "$white" "$x" "$registrar";
+        
+        # Show query timestamp
+        printf "%sQueried:%s %s\n" "$white" "$x" "$(date '+%Y-%m-%d %H:%M:%S %Z')";
+        
+        # Raw WHOIS output in collapsed format
+        printf "\n%s%s Raw WHOIS Output:%s\n" "$grey" "$delta" "$x";
+        echo "$whois_output" | head -20;
+        local total_lines;
+        total_lines=$(echo "$whois_output" | wc -l);
+        if [[ $total_lines -gt 20 ]]; then
+            printf "%s... (%d more lines, use -t for full output)%s\n" "$grey" $((total_lines - 20)) "$x";
+        fi;
+        
     else
-        error "WHOIS query failed for %s" "$domain"
-        ret=3
-    fi
+        error "WHOIS query failed for %s" "$domain";
+        ret=3;
+    fi;
     
-    return $ret
+    return $ret;
 }
 
 ################################################################################
-# do_watch - Domain monitoring with phase-aware polling
+# do_watch - Domain monitoring with enhanced live UX
 ################################################################################
 do_watch() {
-    local domain="$1"
-    local interval="${opt_interval:-$DEFAULT_INTERVAL}"
-    local max_checks="${opt_max_checks:-$DEFAULT_MAX_CHECKS}"
-    local target_epoch=0
-    local expect_pattern="${opt_expect:-}"
-    local use_utc="${opt_time_utc:-0}"
-    local ret=1
+    local domain="$1";
+    local interval="${opt_interval:-$DEFAULT_INTERVAL}";
+    local max_checks="${opt_max_checks:-$DEFAULT_MAX_CHECKS}";
+    local target_epoch=0;
+    local expect_pattern="${opt_expect:-}";
+    local use_utc="${opt_time_utc:-0}";
+    local ret=1;
     
     # Validate inputs
     if ! _validate_domain "$domain"; then
-        return 2
-    fi
+        return 2;
+    fi;
     
     if ! _validate_interval "$interval"; then
-        return 2
-    fi
+        return 2;
+    fi;
     
     # Parse target time if provided
     if [[ -n "${opt_until:-}" ]]; then
         if ! target_epoch=$(__parse_epoch "${opt_until}"); then
-            error "Invalid target time: %s" "${opt_until}"
-            return 4
-        fi
-        info "Target time set: %s" "$(__format_time_display "$target_epoch" "$use_utc")"
-    fi
+            error "Invalid target time: %s" "${opt_until}";
+            return 4;
+        fi;
+        info "Target time set: %s" "$(__format_time_display "$target_epoch" "$use_utc")";
+    fi;
     
     # Check dependencies
     if ! _check_dependencies; then
-        return 3
-    fi
+        return 3;
+    fi;
     
     # Load TLD configuration
-    _load_tld_config
+    _load_tld_config;
+    
+    # Enhanced startup display
+    printf "\n%s%s Watchdom Monitor Starting %s%s\n" "$blue" "$lambda" "$lambda" "$x";
+    printf "%sDomain:%s %s\n" "$white" "$x" "$domain";
+    printf "%sInterval:%s %ss base, phase-aware scaling\n" "$white" "$x" "$interval";
+    if [[ "$target_epoch" -gt 0 ]]; then
+        printf "%sTarget:%s %s\n" "$white" "$x" "$(__format_time_display "$target_epoch" "$use_utc")";
+    fi;
+    printf "%sPhases:%s %s%sPOLL %s%sHEAT %s%sGRACE %s%sCOOL%s\n" "$white" "$x" "$blue" "$lambda" "$red" "$triangle" "$purple" "$triangle_up" "$cyan" "$snowflake" "$x";
+    printf "\n";
     
     # Start monitoring
-    _start_polling "$domain" "$interval" "$max_checks" "$target_epoch" "$expect_pattern" "$use_utc"
-    ret=$?
+    _start_polling "$domain" "$interval" "$max_checks" "$target_epoch" "$expect_pattern" "$use_utc";
+    ret=$?;
     
-    return $ret
+    return $ret;
 }
 
 ################################################################################
-# _start_polling - Polling loop coordination (mid-level helper)
+# _start_polling - Enhanced polling loop with superior UX
 ################################################################################
 _start_polling() {
-    local domain="$1"
-    local base_interval="$2"
-    local max_checks="$3"
-    local target_epoch="$4"
-    local expect_pattern="$5"
-    local use_utc="$6"
+    local domain="$1";
+    local base_interval="$2";
+    local max_checks="$3";
+    local target_epoch="$4";
+    local expect_pattern="$5";
+    local use_utc="$6";
     
-    local check_count=0
-    local start_epoch=$(__get_current_epoch)
-    local whois_output="" domain_status="" registrar=""
-    local matched=0
+    local check_count=0;
+    local start_epoch=$(__get_current_epoch);
+    local whois_output="" domain_status="" registrar="";
+    local matched=0;
+    local previous_phase="";
     
-    info "Starting monitoring for %s with base interval=%ss" "$domain" "$base_interval"
-    [[ "$target_epoch" -gt 0 ]] && info "Target UTC: %s" "$(__format_time_display "$target_epoch" 1)"
+    info "Starting enhanced monitoring for %s with base interval=%ss" "$domain" "$base_interval";
+    [[ "$target_epoch" -gt 0 ]] && info "Target UTC: %s" "$(__format_time_display "$target_epoch" 1)";
     
     while true; do
-        ((check_count++))
-        local current_epoch=$(__get_current_epoch)
+        ((check_count++));
+        local current_epoch=$(__get_current_epoch);
         
         # Execute WHOIS query
         if ! whois_output=$(__whois_query "$domain"); then
-            error "WHOIS query failed, stopping monitoring"
-            return 3
-        fi
+            error "WHOIS query failed, stopping monitoring";
+            return 3;
+        fi;
         
         # Extract domain information
-        domain_status=$(__extract_domain_status "$whois_output")
-        registrar=$(__extract_registrar "$whois_output")
+        domain_status=$(__extract_domain_status "$whois_output");
+        registrar=$(__extract_registrar "$whois_output");
         
         # Check for pattern match
         if _check_pattern_match "$whois_output" "$expect_pattern" "$domain_status"; then
-            matched=1
-            break
-        fi
+            matched=1;
+            break;
+        fi;
         
         # Check max checks limit
         if [[ "$max_checks" -gt 0 && "$check_count" -ge "$max_checks" ]]; then
-            warn "Maximum checks (%d) reached" "$max_checks"
-            break
-        fi
+            warn "Maximum checks (%d) reached" "$max_checks";
+            break;
+        fi;
         
         # Calculate next poll interval based on phase
-        local phase=$(_determine_phase "$target_epoch" "$current_epoch")
-        local time_to_target=$((target_epoch - current_epoch))
-        local next_interval=$(_calculate_interval "$base_interval" "$phase" "$time_to_target")
+        local phase=$(_determine_phase "$target_epoch" "$current_epoch");
+        local time_to_target=$((target_epoch - current_epoch));
+        local next_interval=$(_calculate_interval "$base_interval" "$phase" "$time_to_target");
         
-        # Display live status line
-        local status_line
-        status_line=$(_format_status_line "$domain" "$next_interval" "$target_epoch" "$current_epoch" "$whois_output" "$expect_pattern" "$use_utc")
-        _print_live_line "$status_line"
+        # Enhanced phase transition detection
+        if [[ "$phase" != "$previous_phase" && -n "$previous_phase" ]]; then
+            _announce_phase_transition "$previous_phase" "$phase" "$time_to_target";
+        fi;
+        previous_phase="$phase";
+        
+        # Display enhanced live status line
+        local status_line;
+        status_line=$(_format_enhanced_status_line "$domain" "$next_interval" "$target_epoch" "$current_epoch" "$whois_output" "$expect_pattern" "$use_utc" "$check_count");
+        _print_live_line "$status_line";
         
         # Check grace period timeout
         if _check_grace_timeout "$target_epoch" "$current_epoch" "$domain"; then
-            break
-        fi
+            break;
+        fi;
         
         # Sleep until next poll
-        trace "Sleeping %ss until next poll (phase: %s)" "$next_interval" "$phase"
-        sleep "$next_interval"
-    done
+        trace "Sleeping %ss until next poll (phase: %s)" "$next_interval" "$phase";
+        sleep "$next_interval";
+    done;
     
     # Calculate total monitoring time
-    local end_epoch=$(__get_current_epoch)
-    local total_time=$(_human_time $((end_epoch - start_epoch)))
-    local activity=$(_get_activity_code "$whois_output" "$expect_pattern")
+    local end_epoch=$(__get_current_epoch);
+    local total_time=$(_human_time $((end_epoch - start_epoch)));
+    local activity=$(_get_activity_code "$whois_output" "$expect_pattern");
     
-    # Print completion message
-    _format_completion_message "$matched" "$domain" "$domain_status" "$registrar" "$total_time" "$activity" "$end_epoch"
+    # Enhanced completion message with celebration
+    _format_enhanced_completion_message "$matched" "$domain" "$domain_status" "$registrar" "$total_time" "$activity" "$end_epoch" "$check_count";
     
-    return $((1 - matched))  # 0 if matched, 1 if not
+    return $((1 - matched));  # 0 if matched, 1 if not
 }
 
 ################################################################################
-# _check_pattern_match - Check if domain matches expected pattern
+# _announce_phase_transition - Announce phase changes prominently
 ################################################################################
-_check_pattern_match() {
-    local whois_output="$1"
-    local expect_pattern="$2"
-    local domain_status="$3"
+_announce_phase_transition() {
+    local old_phase="$1";
+    local new_phase="$2";
+    local time_to_target="$3";
     
-    # Custom pattern specified
-    if [[ -n "$expect_pattern" ]]; then
-        if echo "$whois_output" | grep -qi "$expect_pattern"; then
-            trace "Custom pattern matched: %s" "$expect_pattern"
-            return 0
-        fi
-        return 1
-    fi
+    local old_glyph new_glyph old_color new_color;
+    old_glyph=$(_get_phase_glyph "$old_phase");
+    new_glyph=$(_get_phase_glyph "$new_phase");
+    old_color=$(_get_phase_color "$old_phase");
+    new_color=$(_get_phase_color "$new_phase");
     
-    # Default pattern: look for availability
-    if [[ "$domain_status" == "AVAILABLE" ]]; then
-        trace "Domain became available"
-        return 0
-    fi
+    printf "\n\n%s%s Phase Transition %s%s\n" "$yellow" "$spark" "$spark" "$x";
+    printf "%s%s %s%s %s→%s %s%s %s%s\n" "$old_color" "$old_glyph" "$old_phase" "$x" "$yellow" "$x" "$new_color" "$new_glyph" "$new_phase" "$x";
     
-    return 1
+    case "$new_phase" in
+        (HEAT)
+            printf "%sEntering aggressive polling phase - target approaching!%s\n" "$red" "$x";
+            ;;
+        (GRACE)
+            printf "%sTarget time reached - entering grace period monitoring%s\n" "$purple" "$x";
+            ;;
+        (COOL)
+            printf "%sEntering cooldown phase - backing off polling frequency%s\n" "$cyan" "$x";
+            ;;
+    esac;
+    printf "\n";
 }
 
 ################################################################################
-# _check_grace_timeout - Check if grace period exceeded
+# _format_enhanced_status_line - Enhanced status line with better formatting
 ################################################################################
-_check_grace_timeout() {
-    local target_epoch="$1"
-    local current_epoch="$2" 
-    local domain="$3"
+_format_enhanced_status_line() {
+    local domain="$1";
+    local next_poll_seconds="$2";
+    local target_epoch="$3";
+    local current_epoch="$4";
+    local whois_output="$5";
+    local expect_pattern="${6:-}";
+    local use_utc="${7:-0}";
+    local check_count="$8";
     
-    # No target set, no grace period
-    [[ "$target_epoch" -eq 0 ]] && return 1
+    local phase glyph color activity timer target_time time_mode check_display;
     
-    # Before target, no grace period yet
-    [[ "$current_epoch" -lt "$target_epoch" ]] && return 1
+    # Determine phase and get visual elements
+    phase=$(_determine_phase "$target_epoch" "$current_epoch");
+    glyph=$(_get_phase_glyph "$phase");
+    color=$(_get_phase_color "$phase");
     
-    local time_past_target=$((current_epoch - target_epoch))
+    # Determine activity
+    activity=$(_get_activity_code "$whois_output" "$expect_pattern");
     
-    # Within grace period
-    [[ "$time_past_target" -lt "$GRACE_THRESHOLD" ]] && return 1
+    # Format timer (next poll countdown)
+    timer=$(_format_timer "$next_poll_seconds");
     
-    # Grace period exceeded - prompt user
-    printf "\n\n%sGrace period exceeded%s\n" "$yellow" "$x"
-    printf "Target time was %s ago. Continue monitoring %s?\n" "$(_human_time "$time_past_target")" "$domain"
-    printf "[y] Yes, keep monitoring  [n] No, exit  [c] Custom interval: "
-    
-    local response
-    if [[ "${opt_yes:-0}" -eq 1 ]]; then
-        response="y"
-        printf "y (auto-confirmed)\n"
+    # Format target time distance
+    if [[ "$target_epoch" -gt 0 ]]; then
+        local time_to_target=$((target_epoch - current_epoch));
+        target_time=$(_format_target_time "$time_to_target");
     else
-        read -r response
-    fi
+        target_time="none";
+    fi;
     
-    case "$response" in
-        (y|Y|yes|YES)
-            info "Continuing monitoring with extended intervals"
-            return 1  # Continue monitoring
-            ;;
-        (n|N|no|NO|"")
-            info "User chose to exit monitoring"
-            return 0  # Stop monitoring
-            ;;
-        (c|C|custom|CUSTOM)
-            printf "Enter new interval in seconds: "
-            local new_interval
-            read -r new_interval
-            if _validate_interval "$new_interval"; then
-                opt_interval="$new_interval"
-                info "Interval updated to %ss" "$new_interval"
-                return 1  # Continue with new interval
-            else
-                warn "Invalid interval, continuing with current settings"
-                return 1
-            fi
-            ;;
-        (*)
-            warn "Invalid response, continuing monitoring"
-            return 1
-            ;;
-    esac
+    # Time mode indicator
+    time_mode=$([ "$use_utc" -eq 1 ] && echo "UTC" || echo "LOCAL");
+    
+    # Check count display
+    check_display="[#$check_count]";
+    
+    # Build enhanced status line with better spacing
+    printf "%s%s %s%s │ %s │ %s │ %s │ %s │ %s %s%s" \
+        "$color" "$glyph" "$phase" "$x" \
+        "$activity" \
+        "$timer" \
+        "$target_time" \
+        "$domain" \
+        "$time_mode" \
+        "$check_display" \
+        "$x";
 }
 
 ################################################################################
-# do_time - Standalone time countdown mode
+# _format_enhanced_completion_message - Celebration and detailed completion
+################################################################################
+_format_enhanced_completion_message() {
+    local success="$1";
+    local domain="$2";
+    local domain_status="$3";
+    local registrar="$4";
+    local total_time="$5";
+    local activity="$6";
+    local completion_epoch="$7";
+    local total_checks="$8";
+    
+    local symbol color completion_time result_text celebration;
+    
+    # Format completion time (12h with am/pm)
+    completion_time=$(_format_completion_time "$completion_epoch");
+    
+    # Determine success/failure styling and celebration
+    if [[ "$success" -eq 0 ]]; then
+        symbol="$pass";
+        color="$green";
+        celebration="🎉";
+        case "$activity" in
+            (DROP)  result_text="Domain Drop Detected!" ;;
+            (AVAL)  result_text="Domain Available!" ;;
+            (PTRN)  result_text="Pattern Matched!" ;;
+            (EXPR)  result_text="Expiration Detected!" ;;
+            (*)     result_text="Success!" ;;
+        esac;
+    else
+        symbol="$fail";
+        color="$red";
+        celebration="⏰";
+        case "$activity" in
+            (DROP)  result_text="Drop Monitoring Timeout" ;;
+            (AVAL)  result_text="Availability Check Timeout" ;;
+            (PTRN)  result_text="Pattern Search Timeout" ;;
+            (EXPR)  result_text="Expiration Watch Timeout" ;;
+            (*)     result_text="Monitoring Timeout" ;;
+        esac;
+    fi;
+    
+    # Enhanced completion display
+    printf "\n\n%s%s%s Monitoring Complete %s%s%s\n\n" "$color" "$celebration" "$spark" "$spark" "$celebration" "$x";
+    printf "%s%s %s%s at %s\n" "$color" "$symbol" "$result_text" "$x" "$completion_time";
+    printf "\n%sResults:%s\n" "$white" "$x";
+    printf "  %sDomain:%s     %s\n" "$white" "$x" "$domain";
+    printf "  %sStatus:%s     %s\n" "$white" "$x" "$domain_status";
+    printf "  %sRegistrar:%s  %s\n" "$white" "$x" "$registrar";
+    printf "  %sDuration:%s   %s\n" "$white" "$x" "$total_time";
+    printf "  %sChecks:%s     %d queries\n" "$white" "$x" "$total_checks";
+    printf "  %sActivity:%s   %s monitoring\n" "$white" "$x" "$activity";
+    
+    # Add trailing completion record for history
+    _add_completion_history "$domain" "$domain_status" "$registrar" "$total_time" "$completion_time" "$success";
+}
+
+################################################################################
+# _add_completion_history - Add completed poll to trailing history
+################################################################################
+_add_completion_history() {
+    local domain="$1";
+    local status="$2";
+    local registrar="$3";
+    local duration="$4";
+    local time_done="$5";
+    local success="$6";
+    
+    local result_icon;
+    result_icon=$([ "$success" -eq 0 ] && echo "$pass" || echo "$fail");
+    
+    # Format as trailing grey history entry
+    printf "\n%sDone%s %s %s at %s │ %s %s │ %s │ %s │ %s\n" \
+        "$grey" "$x" "$result_icon" "$time_done" \
+        "$domain" "$status" "$registrar" "$duration" \
+        $([ "$success" -eq 0 ] && echo "SUCCESS" || echo "TIMEOUT");
+}
+
+################################################################################
+# Remaining do_* functions with standard formatting
+################################################################################
+
+################################################################################
+# do_time - Standalone time countdown mode with enhanced display
 ################################################################################
 do_time() {
-    local target_time="$1"
-    local use_utc="${opt_time_utc:-0}"
-    local target_epoch
+    local target_time="$1";
+    local use_utc="${opt_time_utc:-0}";
+    local target_epoch;
     
     # Validate and parse target time
     if ! target_epoch=$(__parse_epoch "$target_time"); then
-        error "Invalid target time: %s" "$target_time"
-        return 4
-    fi
+        error "Invalid target time: %s" "$target_time";
+        return 4;
+    fi;
     
-    info "Time countdown mode - target: %s" "$(__format_time_display "$target_epoch" "$use_utc")"
+    printf "\n%s%s Time Countdown Mode %s%s\n" "$blue" "$lambda" "$lambda" "$x";
+    info "Target: %s" "$(__format_time_display "$target_epoch" "$use_utc")";
     
-    # Simple countdown display
-    _format_countdown "$target_epoch" "$(__get_current_epoch)" "$use_utc"
+    # Enhanced countdown display
+    _format_countdown "$target_epoch" "$(__get_current_epoch)" "$use_utc";
     
-    return 0
+    return 0;
 }
 
 ################################################################################
-# do_list_tlds - Show supported TLD configurations
+# Standard do_* functions (unchanged)
 ################################################################################
 do_list_tlds() {
-    printf "\n%sSupported TLD Configurations%s\n\n" "$blue" "$x"
+    printf "\n%s%s Supported TLD Configurations %s%s\n\n" "$blue" "$lambda" "$lambda" "$x";
     
     # Load user config
-    _load_tld_config
+    _load_tld_config;
     
-    printf "%-8s %-25s %s\n" "TLD" "WHOIS Server" "Available Pattern"
-    printf "%-8s %-25s %s\n" "---" "------------" "-----------------"
+    printf "%-8s %-25s %s\n" "TLD" "WHOIS Server" "Available Pattern";
+    printf "%-8s %-25s %s\n" "---" "------------" "-----------------";
     
     # Show built-in and user-configured TLDs
-    local tld server pattern
+    local tld server pattern;
     for tld in "${!TLD_REGISTRY[@]}"; do
-        IFS='|' read -r server pattern <<< "${TLD_REGISTRY[$tld]}"
-        printf "%-8s %-25s %s\n" "$tld" "$server" "$pattern"
-    done
+        IFS='|' read -r server pattern <<< "${TLD_REGISTRY[$tld]}";
+        printf "%-8s %-25s %s\n" "$tld" "$server" "$pattern";
+    done;
     
-    printf "\nUser configuration file: %s\n" "$WATCHDOM_RC"
+    printf "\nUser configuration file: %s\n" "$WATCHDOM_RC";
     
-    return 0
+    return 0;
 }
 
-################################################################################
-# do_add_tld - Add TLD configuration
-################################################################################
 do_add_tld() {
-    local tld="$1"
-    local server="$2"
-    local pattern="$3"
+    local tld="$1";
+    local server="$2";
+    local pattern="$3";
     
     # Validate inputs
     if [[ -z "$tld" || -z "$server" || -z "$pattern" ]]; then
-        error "Usage: add_tld TLD WHOIS_SERVER AVAILABLE_PATTERN"
-        return 2
-    fi
+        error "Usage: add_tld TLD WHOIS_SERVER AVAILABLE_PATTERN";
+        return 2;
+    fi;
     
     # Ensure TLD starts with dot
-    [[ "$tld" != .* ]] && tld=".$tld"
+    [[ "$tld" != .* ]] && tld=".$tld";
     
     # Add to user configuration
-    echo "$tld|$server|$pattern" >> "$WATCHDOM_RC"
+    echo "$tld|$server|$pattern" >> "$WATCHDOM_RC";
     
-    okay "Added TLD configuration: %s -> %s | %s" "$tld" "$server" "$pattern"
-    return 0
+    okay "Added TLD configuration: %s -> %s | %s" "$tld" "$server" "$pattern";
+    return 0;
 }
 
-################################################################################
-# do_test_tld - Test TLD configuration
-################################################################################
 do_test_tld() {
-    local tld="$1"
-    local test_domain="$2"
+    local tld="$1";
+    local test_domain="$2";
     
     if [[ -z "$tld" || -z "$test_domain" ]]; then
-        error "Usage: test_tld TLD TEST_DOMAIN"
-        return 2
-    fi
+        error "Usage: test_tld TLD TEST_DOMAIN";
+        return 2;
+    fi;
     
     # Load configuration
-    _load_tld_config
+    _load_tld_config;
     
     # Get TLD configuration
-    local config server pattern
-    config=$(_get_tld_config "$test_domain")
-    IFS='|' read -r server pattern <<< "$config"
+    local config server pattern;
+    config=$(_get_tld_config "$test_domain");
+    IFS='|' read -r server pattern <<< "$config";
     
-    printf "\n%sTLD Test Results%s\n" "$blue" "$x"
-    printf "TLD: %s\n" "$tld"
-    printf "Test domain: %s\n" "$test_domain"
-    printf "WHOIS server: %s\n" "${server:-default}"
-    printf "Expected pattern: %s\n" "${pattern:-available}"
+    printf "\n%s%s TLD Test Results %s%s\n" "$blue" "$lambda" "$lambda" "$x";
+    printf "TLD: %s\n" "$tld";
+    printf "Test domain: %s\n" "$test_domain";
+    printf "WHOIS server: %s\n" "${server:-default}";
+    printf "Expected pattern: %s\n" "${pattern:-available}";
     
     # Execute test query
-    local whois_output
+    local whois_output;
     if whois_output=$(__whois_query "$test_domain"); then
-        printf "\n%sPattern Match Test:%s\n" "$yellow" "$x"
+        printf "\n%sPattern Match Test:%s\n" "$yellow" "$x";
         if echo "$whois_output" | grep -qi "${pattern:-available}"; then
-            printf "%s%s Pattern MATCHED%s\n" "$green" "$pass" "$x"
-            return 0
+            printf "%s%s Pattern MATCHED%s\n" "$green" "$pass" "$x";
+            return 0;
         else
-            printf "%s%s Pattern NOT matched%s\n" "$red" "$fail" "$x"
-            return 1
-        fi
+            printf "%s%s Pattern NOT matched%s\n" "$red" "$fail" "$x";
+            return 1;
+        fi;
     else
-        error "WHOIS query failed for test domain"
-        return 3
-    fi
+        error "WHOIS query failed for test domain";
+        return 3;
+    fi;
 }
