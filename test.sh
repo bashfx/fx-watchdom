@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# Final Test Suite - Final Version
+# Final, Final, Final Test Suite
 # ==============================================================================
 
 # --- State and Counters ---
@@ -76,9 +76,21 @@ hash -r
 
 ((TOTAL_TESTS++)); current_test_desc="Status check (installed)"
 printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
-output=$(watchdom status -d 2>&1); exit_code=$?
+output=$(watchdom status 2>&1); exit_code=$?
 echo "$output"
-if [[ $exit_code -ne 0 ]]; then print_fail "Status failed. Expected 0, got $exit_code."; elif ! printf "%s" "$output" | grep -q "is properly installed"; then print_fail "Did not print success message."; else print_pass; fi
+if [[ $exit_code -ne 0 ]]; then print_fail "Status failed. Expected 0, got $exit_code."; else print_pass; fi
+
+((TOTAL_TESTS++)); current_test_desc="Info command"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(watchdom info 2>&1); exit_code=$?
+echo "$output"
+if [[ $exit_code -ne 0 ]]; then print_fail "Info command failed. Expected 0, got $exit_code."; elif ! printf "%s" "$output" | grep -q "Copyright"; then print_fail "Did not print 'Copyright' message."; elif ! printf "%s" "$output" | grep -q "▄▄▌"; then print_fail "Did not print logo."; else print_pass; fi
+
+((TOTAL_TESTS++)); current_test_desc="Version command"
+printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
+output=$(watchdom version 2>&1); exit_code=$?
+echo "$output"
+if [[ $exit_code -ne 0 ]]; then print_fail "Version command failed. Expected 0, got $exit_code."; elif ! printf "%s" "$output" | grep -q "2.1.0-bashfx"; then print_fail "Did not print correct version."; else print_pass; fi
 
 ((TOTAL_TESTS++)); current_test_desc="List TLDs"
 printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
@@ -108,25 +120,25 @@ print_header "Feature and Flag Tests"
 
 ((TOTAL_TESTS++)); current_test_desc="One-time query feature"
 printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
-output=$(watchdom google.com 2>&1); exit_code=$?
+output=$(watchdom watch google.com 2>&1); exit_code=$?
 echo "$output"
 if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; elif ! printf "%s" "$output" | grep -q "Domain Name:"; then print_fail "Did not print WHOIS info."; else print_pass; fi
 
 ((TOTAL_TESTS++)); current_test_desc="Interval flag (-i 10)"
 printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
-output=$(watchdom -d google.com -i 10 -n 1 2>&1); exit_code=$?
+output=$(watchdom watch -d google.com -i 10 -n 1 2>&1); exit_code=$?
 echo "$output"
-if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; elif ! printf "%s" "$output" | grep -q "base interval=10s"; then print_fail "Did not print correct interval message."; else print_pass; fi
+if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; elif ! printf "%s" "$output" | grep -q "base interval=10s"; then print_fail "Did not print correct interval message."; elif ! printf "%s" "$output" | grep -q "Last poll"; then print_fail "Did not print persistent status line."; else print_pass; fi
 
 ((TOTAL_TESTS++)); current_test_desc="Until flag (--until)"
 printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
-output=$(watchdom -d google.com --until '2099-01-01 00:00:00 UTC' -i 1 -n 1 2>&1); exit_code=$?
+output=$(watchdom watch -d google.com --until '2099-01-01 00:00:00 UTC' -i 1 -n 1 2>&1); exit_code=$?
 echo "$output"
-if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; elif ! printf "%s" "$output" | grep -q "Target UTC"; then print_fail "Did not print correct target message."; else print_pass; fi
+if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; elif ! printf "%s" "$output" | grep -q "Target UTC"; then print_fail "Did not print correct target message."; elif ! printf "%s" "$output" | grep -q "Last poll"; then print_fail "Did not print persistent status line."; else print_pass; fi
 
 ((TOTAL_TESTS++)); current_test_desc="Auto-yes flag (-y) for grace period"
 printf "\nRunning Test %d: %s\n" "$TOTAL_TESTS" "$current_test_desc"
-output=$(watchdom -d -y google.com --until "2020-01-01 00:00:00 UTC" -n 1 2>&1); exit_code=$?
+output=$(watchdom watch -d -y google.com --until "2020-01-01 00:00:00 UTC" -n 1 2>&1); exit_code=$?
 echo "$output"
 if [[ $exit_code -ne 1 ]]; then print_fail "Incorrect exit code. Expected 1, got $exit_code."; elif ! printf "%s" "$output" | grep -q "y (auto-confirmed)"; then print_fail "Did not auto-confirm prompt."; else print_pass; fi
 

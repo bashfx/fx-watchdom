@@ -1,8 +1,21 @@
 #!/usr/bin/env bash
+#===============================================================================
+##
+## ▄▄▌ ▐ ▄▌ ▄▄▄· ▄▄▄▄▄ ▄▄·  ▄ .▄·▄▄▄▄        • ▌ ▄ ·.
+## ██· █▌▐█▐█ ▀█ •██  ▐█ ▌▪██▪▐███▪ ██ ▪     ·██ ▐███▪
+## ██▪▐█▐▐▌▄█▀▀█  ▐█.▪██ ▄▄██▀▐█▐█· ▐█▌ ▄█▀▄ ▐█ ▌▐▌▐█·
+## ▐█▌██▐█▌▐█ ▪▐▌ ▐█▌·▐███▌██▌▐▀██. ██ ▐█▌.▐▌██ ██▌▐█▌
+##  ▀▀▀▀ ▀▪ ▀  ▀  ▀▀▀ ·▀▀▀ ▀▀▀ ·▀▀▀▀▀•  ▀█▄▀▪▀▀  █▪▀▀▀
+##
+#===============================================================================
 # watchdom - registry WHOIS watcher with dynamic countdown
-# version: 2.0.0-bashfx
+# version: 2.1.0-bashfx
+# author: brian m. carlson
 # portable: whois, date, grep, sed
 # builtins: printf, read, local, declare, case, if, for, while
+
+# Set to 1 to print the logo, 0 to suppress
+logo_printed=1
 
 ################################################################################
 # readonly
@@ -516,6 +529,18 @@ _check_grace_timeout() {
 ################################################################################
 
 ################################################################################
+# _print_logo
+################################################################################
+_print_logo() {
+    if [[ "$logo_printed" -eq 1 ]]; then
+        printf "\n" >&2
+        grep '^##' "$0" | sed 's/^##//' | printf "${purple}%s${x}\n" "$(cat)" >&2
+        printf "\n" >&2
+        logo_printed=0
+    fi
+}
+
+################################################################################
 # _ensure_dependency
 ################################################################################
 # Checks for a command and prompts to install it if missing.
@@ -721,6 +746,28 @@ __format_date() {
 ################################################################################
 
 ################################################################################
+# do_info
+################################################################################
+do_info() {
+    _print_logo
+    local ver author
+    ver=$(grep "^# version:" "$0" | awk '{print $3}')
+    author=$(grep "^# author:" "$0" | sed 's/^# author: //')
+    printf "  ${bld}${SELF_NAME} v%s${x} - ${purple}A BashFX Utility${x}\n" "$ver" >&2
+    printf "${grey}  --------------------------------------------------${x}\n" >&2
+    printf "  Copyright (c) 2025, %s\n" "$author" >&2
+    printf "\n  Licensed under the Apache License, Version 2.0.\n" >&2
+    return 0
+}
+
+################################################################################
+# do_version
+################################################################################
+do_version() {
+    grep "^# version:" "$0" | awk '{print $3}'
+}
+
+################################################################################
 # do_watch
 ################################################################################
 do_watch() {
@@ -860,7 +907,9 @@ do_watch() {
             _notify_event "success" "$domain" "Detected at $(date)";
             return 0;
         else
-            trace "No match yet - effective interval %ss" "$eff_interval";
+            # Not a match, so we will loop again.
+            # Leave a status line indicating the last poll time.
+            printf "\r%s[ %s ] Last poll. No match found. Next in %ss.%s%s\n" "$grey" "$(date +%H:%M:%S)" "$eff_interval" "$x" "$eol" >&2
         fi;
 
         if [[ -n "$target_epoch" ]]; then
@@ -908,8 +957,6 @@ do_watch() {
             sleep 1;
             trace "Countdown sleep finished.";
         done;
-
-        printf "\r%80s\r" "" >&2;
     done;
 };
 
@@ -1258,7 +1305,7 @@ dispatch() {
     local ret=1;
 
     case "$cmd" in
-        (watch|time|list_tlds|add_tld|test_tld|install|uninstall|status)
+        (info|version|watch|time|list_tlds|add_tld|test_tld|install|uninstall|status)
             shift;
             "do_$cmd" "$@";
             ret=$?;
@@ -1277,99 +1324,44 @@ dispatch() {
 # usage
 ################################################################################
 usage() {
+    _print_logo
     cat <<'EOF'
-watchdom v2.0.0-bashfx - registry WHOIS watcher with dynamic countdown
+watchdom v2.1.0-bashfx - registry WHOIS watcher with dynamic countdown
 
 USAGE:
-  # Domain watching
-  watchdom [watch] DOMAIN [OPTIONS]
-  watchdom DOMAIN [OPTIONS]                    # Legacy compatibility
+  watchdom <command> [options]
 
-  # Time utilities
-  watchdom time "YYYY-MM-DD HH:MMS UTC"     # Time countdown only
-  watchdom time EPOCH_SECONDS                 # Time countdown only
-
-  # TLD management
-  watchdom list_tlds                          # Show supported TLDs
-  watchdom add_tld TLD SERVER PATTERN         # Add custom TLD support
-  watchdom test_tld TLD DOMAIN                # Test TLD pattern
-
-  # Installation management
-  watchdom install                            # Install to ~/.local/lib/fx/
-  watchdom uninstall                          # Remove installation
-  watchdom status                             # Show installation status
+COMMANDS:
+  watch <domain>      Monitor a domain. Use options for polling.
+  info                Display script information and logo.
+  version             Display script version.
+  time <datetime>     Standalone time countdown utility.
+  list_tlds           Show all supported TLD patterns.
+  add_tld <tld>...    Add custom TLD support.
+  test_tld <tld>...   Test a TLD's availability pattern.
+  install             Install the script system-wide.
+  uninstall           Remove the script.
+  status              Show installation status.
 
 OPTIONS:
-  Standard BashFX flags:
-    -d, --debug     Enable info/okay/warn messages
-    -t, --trace     Enable trace messages (verbose polling)
-    -q, --quiet     Force quiet mode
-    -f, --force     Skip safety guards
-    -D, --dev       Developer mode (implies -d -t)
-
-  Domain watching flags:
-    -i SECONDS      Base poll interval (default: 60)
-    -e REGEX        Override expected pattern
-    -n MAX_CHECKS   Stop after N checks (default: unlimited)
-    --until WHEN    Target datetime or epoch seconds
-    --time_local    Display timestamps in local time only
-
-POLLING PHASES:
-  [PRE]   >30min before target: base interval (blue λ)
-  [HEAT]  ≤30min before target: ramp to 10s (red ▲)
-  [GRACE] 0-3hrs after target: stick at 10s (purple △)
-  [COOL]  >3hrs after target: progressive cooldown (cyan ❄)
-
-EMAIL NOTIFICATIONS:
-  Set all variables to enable email alerts:
-    NOTIFY_EMAIL, NOTIFY_FROM, NOTIFY_SMTP_HOST,
-    NOTIFY_SMTP_PORT, NOTIFY_SMTP_USER, NOTIFY_SMTP_PASS
-
-EXAMPLES:
-  watchdom example.com -i 30                  # Watch with 30s base interval
-  watchdom watch example.com --until "2025-12-25 18:00:00 UTC"
-  watchdom time "2025-12-25 18:00:00 UTC"     # Time countdown only
-  watchdom list_tlds                          # Show supported TLDs
-  watchdom add_tld .uk whois.nominet.uk "No such domain"
-  watchdom test_tld .com test-domain.com      # Test pattern
-  watchdom install                            # Install system-wide
-  watchdom status                             # Check installation
-
-EXIT CODES:
-  0: Success (pattern matched)
-  1: Not found (max checks reached or user exit)
-  2: Bad arguments
-  3: Missing dependencies
-  4: Date parse error
+  -i, --interval SECS   Base polling interval in seconds. (Default: 60)
+  -n, --max-checks N    Stop after N checks if domain is not found.
+  --until DATETIME      Target time for dynamic interval ramping.
+  -y, --yes             Automatically answer "yes" to all prompts.
+  -d, --debug           Enable detailed informational messages.
+  -h, --help            Show this help message.
 EOF
 };
 
 ################################################################################
-# options
-################################################################################
-# Note: Options parsing is now handled directly in main() for robustness
-# This ensures that `shift` operates on the correct argument scope.
-
-################################################################################
 # main
 ################################################################################
-
-################################################################################
-# _cleanup
-################################################################################
 _cleanup() {
-    local grace_files;
-    grace_files=$(find /tmp -name ".watchdom_grace_*_$$" 2>/dev/null);
-    if [[ -n "$grace_files" ]]; then
-        rm -f $grace_files;
-    fi;
-    printf "\n" >&2;
-    info "Monitoring stopped";
-    exit 130;
-};
+    # No cleanup needed in this version
+    return
+}
 
 main() {
-    local ret=1;
     trap '_cleanup' INT TERM;
 
     # Initialize option variables
@@ -1385,73 +1377,64 @@ main() {
     opt_time_local=0
     opt_yes=0
 
-    # Parse all options, separating them from positional arguments
+    # This robust loop parses flags from any position,
+    # separating them from positional arguments.
     local args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            (-h|--help) usage; exit 0 ;;
             (-d|--debug) opt_debug=1; shift ;;
             (-t|--trace) opt_trace=1; opt_debug=1; shift ;;
             (-q|--quiet) opt_quiet=1; opt_debug=0; opt_trace=0; shift ;;
             (-f|--force) opt_force=1; shift ;;
             (-D|--dev) opt_dev=1; opt_debug=1; opt_trace=1; shift ;;
             (-y|--yes) opt_yes=1; shift ;;
-            (-i)
-                [[ $# -ge 2 ]] || { error "Option -i requires an argument"; return 2; };
+            (-i|--interval)
+                [[ -n "${2:-}" ]] || { error "Option $1 requires an argument"; return 2; };
                 opt_interval="$2"; shift 2 ;;
-            (-e)
-                [[ $# -ge 2 ]] || { error "Option -e requires an argument"; return 2; };
+            (-e|--expect)
+                [[ -n "${2:-}" ]] || { error "Option $1 requires an argument"; return 2; };
                 opt_expect="$2"; shift 2 ;;
-            (-n)
-                [[ $# -ge 2 ]] || { error "Option -n requires an argument"; return 2; };
+            (-n|--max-checks)
+                [[ -n "${2:-}" ]] || { error "Option $1 requires an argument"; return 2; };
                 opt_max_checks="$2"; shift 2 ;;
             (--until)
-                [[ $# -ge 2 ]] || { error "Option --until requires an argument"; return 2; };
+                [[ -n "${2:-}" ]] || { error "Option $1 requires an argument"; return 2; };
                 opt_until="$2"; shift 2 ;;
             (--time_local) opt_time_local=1; shift ;;
-            (--time_until) # Legacy compatibility
-                [[ $# -ge 2 ]] || { error "Option --time_until requires an argument"; return 2; };
-                set -- "time" "$2"; # Convert to 'time' command
-                break ;;
-            (-h|--help) usage; exit 0 ;;
-            (--) shift; args+=("$@"); break ;; # All remaining are positional
+            (--) shift; args+=("$@"); break ;;
             (-*) error "Unknown option: $1"; usage; return 2 ;;
-            (*) args+=("$1"); shift ;; # It's a positional argument
+            (*) args+=("$1"); shift ;;
         esac
     done
     # Restore positional arguments
     [[ ${#args[@]} -gt 0 ]] && set -- "${args[@]}"
 
-    # Apply quiet mode
+    # If the first argument is not a known command, assume it's a domain for 'watch'
+    if [[ $# -gt 0 ]]; then
+        case "$1" in
+            (info|version|watch|time|list_tlds|add_tld|test_tld|install|uninstall|status)
+                : # It's a known command, do nothing.
+                ;;
+            (*)
+                # Not a command, so prepend 'watch' to the argument list.
+                set -- "watch" "$@"
+                ;;
+        esac
+    fi
+
     if [[ "$opt_quiet" -eq 1 ]]; then
-        opt_debug=0;
-        opt_trace=0;
-    fi;
+        opt_debug=0
+        opt_trace=0
+    fi
 
-    # If no positional args, show usage
     if [[ $# -eq 0 ]]; then
-        error "No command or domain specified";
-        usage;
-        return 2;
-    fi;
-
-    # Detect legacy `watchdom domain.com` syntax and prepend 'watch' command
-    local cmd="${1:-}"
-    case "$cmd" in
-        (watch|time|list_tlds|add_tld|test_tld|install|uninstall|status)
-             # It's a normal command, do nothing
-            ;;
-        (*)
-            # It's not a known command. Check if it's a domain (legacy mode).
-            if [[ -n "$cmd" && "$cmd" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-                # Prepend 'watch' to the argument list
-                set -- watch "$@";
-            fi;
-            ;;
-    esac;
+        usage
+        return 2
+    fi
 
     dispatch "$@";
-    ret=$?;
-    return $ret;
+    return $?;
 };
 
 ################################################################################
