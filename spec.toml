@@ -1,0 +1,41 @@
+[repo]
+uid = "repo_d6443b828d118d53eef2"
+id = "bashfx/fx-watchdom"
+name = "fx-watchdom"
+kind = "tool"
+lifecycle = "active"
+
+[[capabilities]]
+name = "domain.resolve"
+module = "parts/07_commands.sh"
+class = "tool"
+tags = ["whois", "availability", "tld", "registrar", "unproven-live-query"]
+stability = "experimental"
+
+[[capabilities]]
+name = "domain.scan"
+module = "parts/07_commands.sh"
+class = "tool"
+tags = ["watch", "poll", "drop-catch", "rate-limit", "unproven-live-query"]
+stability = "experimental"
+
+[[capabilities]]
+name = "clock.schedule"
+module = "parts/07_commands.sh"
+class = "tool"
+tags = ["countdown", "until", "phase-aware", "timer"]
+stability = "working"
+
+[[capabilities]]
+name = "config.resolve"
+module = "parts/05_validators.sh"
+class = "adapter"
+tags = ["tld-config", "pattern", "whois-server", "xdg"]
+stability = "working"
+
+[[capabilities]]
+name = "process.manage"
+module = "parts/09_footer.sh"
+class = "adapter"
+tags = ["install", "uninstall", "status", "xdg"]
+stability = "experimental"
